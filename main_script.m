@@ -1,5 +1,5 @@
 
-% main_merged_analysis_with_stats.m
+% Event-aligned exploratory analysis; condition labels require validation.
 % Merge raster and PSTH across all usable .mat files, with vision comparison
 
 clear; clc;
@@ -9,21 +9,23 @@ if ~exist('outputs', 'dir')
     mkdir('outputs')
 end
 
-mkdir('outputs');
-exist('outputs', 'dir') 
+
 
 
 % Parameters
 binSize = 0.01;
 window = [-0.5, 1];
 edges = window(1):binSize:window(2);
-% from function named score_all_alignments.m
-% but it takes too long time to run
-% so I just put the result here
-alignCode = 0;  
+% Configured event code; verify its meaning against acquisition metadata.
+% score_all_alignments() provides an optional exploratory ranking.
+% No saved ranking is included to establish why code 0 was selected.
+alignCode = 0;
 
 files = dir('data/**/*.mat');
 files = files(~contains({files.name}, 'plxAnaAD'));
+if isempty(files)
+    error('No input files found. Supply authorized MAT files under data/. See README.');
+end
 
 allSpikeCounts = [];
 visionSpikeCounts = [];
@@ -51,7 +53,8 @@ for k = 1:length(files)
                 continue;
             end
 
-            % Alternate assignment
+            % ASSUMPTION: odd/even events represent Vision/No Vision.
+            % Verify against experimental metadata before interpreting conditions.
             visionAlignTimes = alignTimes(1:2:end);
             noVisionAlignTimes = alignTimes(2:2:end);
 
@@ -134,7 +137,7 @@ if ~isempty(visionSpikeCounts) && ~isempty(noVisionSpikeCounts)
     % Difference threshold before smoothing
     diffPSTH = abs(visionPSTH - noVisionPSTH);
     threshold = 5;
-    sigBins = diffPSTH > threshold;
+    differenceBins = diffPSTH > threshold;
 
     % Smoothing
     visionPSTH = smoothdata(visionPSTH, 'gaussian', 5);
@@ -146,19 +149,22 @@ if ~isempty(visionSpikeCounts) && ~isempty(noVisionSpikeCounts)
     title('Vision vs No Vision PSTH');
     xlabel('Time (s)');
     ylabel('Firing Rate (Hz)');
-    legend('Vision','No Vision');
 
-    % Significance stars
-    sigY = max([visionPSTH, noVisionPSTH]) * 1.1;
-    plot(binCenters(sigBins), sigY * ones(1, sum(sigBins)), 'k*');
 
-    % Save statistics
+    % Descriptive markers: not a statistical test or significance claim.
+    markerY = max([visionPSTH, noVisionPSTH]) * 1.1;
+    plot(binCenters(differenceBins), markerY * ones(1, sum(differenceBins)), 'k.');
+
+    legend('Vision (assumed odd events)', 'No Vision (assumed even events)', ...
+        'Absolute unsmoothed difference > 5 Hz (descriptive)');
+
+    % Save descriptive summaries; no p-values or inferential test.
     stats = struct();
     stats.binCenters = binCenters;
     stats.visionPSTH = visionPSTH;
     stats.noVisionPSTH = noVisionPSTH;
     stats.diffPSTH = diffPSTH;
-    stats.significantBins = sigBins;
+    stats.differenceBins = differenceBins;
     stats.threshold = threshold;
 
     [stats.visionPeakFR, idxV] = max(visionPSTH);
@@ -166,9 +172,9 @@ if ~isempty(visionSpikeCounts) && ~isempty(noVisionSpikeCounts)
     stats.visionPeakTime = binCenters(idxV);
     stats.noVisionPeakTime = binCenters(idxNV);
 
-    save('outputs/vision_comparison_stats.mat', 'stats');
-    fprintf('Saved statistics to outputs/vision_comparison_stats.mat\n');
+    save('outputs/vision_comparison_summary.mat', 'stats');
+    fprintf('Saved descriptive summary to outputs/vision_comparison_summary.mat\n');
 
-    saveas(fig3, 'outputs/vision_comparison_with_stats.png');
+    saveas(fig3, 'outputs/vision_comparison_descriptive.png');
     close(fig3);
 end
