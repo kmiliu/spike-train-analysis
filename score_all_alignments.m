@@ -64,6 +64,11 @@ for a = 1:length(alignCodes)
     results = [results; alignCode, score, peakFR, peakTime];
 end
 
+% Heuristic ranking only; selection on these data is exploratory.
+if isempty(results)
+    error('No usable events found. Check authorized input data and event codes.');
+end
+
 % Sort and save
 [~, idx] = sort(results(:,2), 'descend');
 results_sorted = results(idx, :);
